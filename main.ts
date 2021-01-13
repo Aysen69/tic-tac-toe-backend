@@ -32,16 +32,15 @@ io.on('connection', (socket: Socket) => {
     for (let i = 0; i < rooms.length; i++) {
       if (rooms[i].id == roomId) {
         rooms[i].joinPlayer(player)
-        io.to(rooms[i].secondPlayer!.id).emit('joinedToRoom', {
-          roomId: rooms[i].id,
-          nickname: rooms[i].firstPlayer.nickname
+        io.to(rooms[i].secondPlayer!.id).emit('youJoinedToTheRoom', {
+          yourEnemy: { nickname: rooms[i].firstPlayer.nickname }
         })
         io.to(rooms[i].firstPlayer.id).emit('someoneJoinedToYourRoom', {
-          nickname: rooms[i].secondPlayer!.nickname
+          yourEnemy: { nickname: rooms[i].secondPlayer!.nickname }
         })
         if (rooms[i].getRoomStatus() == RoomStatus.InBattle) {
-          io.to(rooms[i].firstPlayer.id).emit('gameMap', rooms[i].getRoomMap().getCells())
-          io.to(rooms[i].secondPlayer!.id).emit('gameMap', rooms[i].getRoomMap().getCells())
+          io.to(rooms[i].firstPlayer.id).emit('tiles', rooms[i].getRoomMap().getCells())
+          io.to(rooms[i].secondPlayer!.id).emit('tiles', rooms[i].getRoomMap().getCells())
         }
         break
       }
@@ -51,14 +50,19 @@ io.on('connection', (socket: Socket) => {
     for (let i = 0; i < rooms.length; i++) {
       if (rooms[i].id == roomId) {
         let turn = rooms[i].takeTurn(playerId, new Vector2D(x, y))
-        io.to(rooms[i].firstPlayer.id).emit('gameMap', rooms[i].getRoomMap().getCells())
-        io.to(rooms[i].secondPlayer!.id).emit('gameMap', rooms[i].getRoomMap().getCells())
+        io.to(rooms[i].firstPlayer.id).emit('tiles', rooms[i].getRoomMap().getCells())
+        io.to(rooms[i].secondPlayer!.id).emit('tiles', rooms[i].getRoomMap().getCells())
         if (turn) {
           io.to(rooms[i].firstPlayer.id).emit('gameOver', rooms[i].firstPlayer.gamerStatus, turn)
           io.to(rooms[i].secondPlayer!.id).emit('gameOver', rooms[i].secondPlayer!.gamerStatus, turn)
         } else {
-          io.to(rooms[i].firstPlayer.id).emit('isYourTurn', rooms[i].isTurnOfFirstPlayer)
-          io.to(rooms[i].secondPlayer!.id).emit('isYourTurn', !rooms[i].isTurnOfFirstPlayer)
+          if (rooms[i].isTurnOfFirstPlayer) {
+            io.to(rooms[i].firstPlayer.id).emit('yourTurn')
+            io.to(rooms[i].secondPlayer!.id).emit('enemyTurn')
+          } else {
+            io.to(rooms[i].firstPlayer.id).emit('enemyTurn')
+            io.to(rooms[i].secondPlayer!.id).emit('yourTurn')
+          }
         }
         if (rooms[i].getRoomStatus() == RoomStatus.End) {
           rooms.splice(i, 1)
