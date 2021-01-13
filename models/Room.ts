@@ -9,35 +9,31 @@ enum RoomStatus {
     End
 }
 
-type Players = {
-    first: Player;
-    second: Player | void;
+type SimpleRoom = {
+  id: string
+  name: string
 }
 
 class Room {
     public readonly id: string
     public readonly name: string
-    private _firstPlayer: Player
-    private _secondPlayer?: Player
+    public firstPlayer: Player
+    public secondPlayer?: Player
     private _roomMap: RoomMap
-    private _isTurnOfFirstPlayer: boolean
+    public isTurnOfFirstPlayer: boolean
     private _roomStatus: RoomStatus
 
-    constructor(player: Player, name: string, mapSize: number) {
+    constructor(player: Player, name: string, mapSize?: number, timeoutInSeconds?: number) {
+        mapSize = mapSize ? mapSize : 3
+        timeoutInSeconds = timeoutInSeconds ? timeoutInSeconds : 60 * 15
         this.id = uuidv4()
         this.name = name
-        this._firstPlayer = player
-        this._firstPlayer.gamerStatus = GamerStatus.Waiting
+        this.firstPlayer = player
+        this.firstPlayer.gamerStatus = GamerStatus.Waiting
         this._roomMap = new RoomMap(mapSize)
-        this._isTurnOfFirstPlayer = true
+        this.isTurnOfFirstPlayer = true
         this._roomStatus = RoomStatus.WaitingForPlayer
-    }
-
-    public getPlayers(): Players {
-        return {
-            first: this._firstPlayer,
-            second: this._secondPlayer
-        }
+        setTimeout(() => this._roomStatus = RoomStatus.End, timeoutInSeconds)
     }
 
     public getRoomStatus(): RoomStatus {
@@ -50,30 +46,30 @@ class Room {
 
     public joinPlayer(player: Player) {
         if (this._roomStatus == RoomStatus.WaitingForPlayer) {
+            this.secondPlayer = player
             this._roomStatus = RoomStatus.InBattle
-            this._secondPlayer = player
-            this._secondPlayer.gamerStatus = GamerStatus.InBattle
-            this._firstPlayer.gamerStatus = GamerStatus.InBattle
+            this.secondPlayer.gamerStatus = GamerStatus.InBattle
+            this.firstPlayer.gamerStatus = GamerStatus.InBattle
         }
     }
 
-    public takeTurn(player: Player, coordinate: Vector2D) {
+    public takeTurn(playerId: string, coordinate: Vector2D): Vector2D[] | void {
         if (this._roomStatus == RoomStatus.InBattle) {
-            let isTurnTaked = false;
-            if (this._isTurnOfFirstPlayer == true && this._firstPlayer.id == player.id) {
+            let isTurnTaked = false
+            if (this.isTurnOfFirstPlayer == true && this.firstPlayer.id == playerId) {
                 if (this._roomMap!.setCross(coordinate)) isTurnTaked = true
             }
-            if (this._isTurnOfFirstPlayer == false && this._secondPlayer!.id == player.id) {
+            if (this.isTurnOfFirstPlayer == false && this.secondPlayer!.id == playerId) {
                 if (this._roomMap!.setNought(coordinate)) isTurnTaked = true
             }
             if (isTurnTaked) {
-                this._isTurnOfFirstPlayer = !this._isTurnOfFirstPlayer
+                this.isTurnOfFirstPlayer = !this.isTurnOfFirstPlayer
                 let win = this._roomMap!.checkWin()
                 if (win) {
                     if (win.winner == Winner.TheCross) {
-                        this._gameOver(this._firstPlayer)
+                        this._gameOver(this.firstPlayer)
                     } else if (win.winner == Winner.TheNought) {
-                        this._gameOver(this._secondPlayer)
+                        this._gameOver(this.secondPlayer)
                     } else {
                         this._gameOver()
                     }
@@ -83,15 +79,15 @@ class Room {
         }
     }
 
-    public surrender(player: Player) {
+    public surrender(playerId: string) {
         if (this._roomStatus == RoomStatus.InBattle) {
             let isSurrendered = false
-            if (player.id == this._firstPlayer.id) {
-                this._gameOver(this._secondPlayer)
+            if (playerId == this.firstPlayer.id) {
+                this._gameOver(this.secondPlayer)
                 isSurrendered = true
             }
-            if (player.id == this._secondPlayer!.id) {
-                this._gameOver(this._firstPlayer)
+            if (playerId == this.secondPlayer!.id) {
+                this._gameOver(this.firstPlayer)
                 isSurrendered = true
             }
             if (isSurrendered) {
@@ -104,19 +100,26 @@ class Room {
         if (this._roomStatus == RoomStatus.InBattle) {
             this._roomStatus = RoomStatus.End
             if (winner) {
-                if (winner.id == this._firstPlayer.id) {
-                    this._firstPlayer.gamerStatus = GamerStatus.Win
-                    this._secondPlayer!.gamerStatus! = GamerStatus.Lose
-                } else if (winner.id == this._secondPlayer!.id) {
-                    this._firstPlayer.gamerStatus = GamerStatus.Lose
-                    this._secondPlayer!.gamerStatus = GamerStatus.Win
+                if (winner.id == this.firstPlayer.id) {
+                    this.firstPlayer.gamerStatus = GamerStatus.Win
+                    this.secondPlayer!.gamerStatus = GamerStatus.Lose
+                } else if (winner.id == this.secondPlayer!.id) {
+                    this.firstPlayer.gamerStatus = GamerStatus.Lose
+                    this.secondPlayer!.gamerStatus = GamerStatus.Win
                 }
             } else {
-                this._firstPlayer.gamerStatus = GamerStatus.Draw
-                this._secondPlayer!.gamerStatus = GamerStatus.Draw
+                this.firstPlayer.gamerStatus = GamerStatus.Draw
+                this.secondPlayer!.gamerStatus = GamerStatus.Draw
             }
+        }
+    }
+
+    public getAsSimpleRoom(): SimpleRoom {
+        return {
+            id: this.id,
+            name: this.name
         }
     }
 }
 
-export { Room, RoomStatus }
+export { Room, RoomStatus, SimpleRoom }

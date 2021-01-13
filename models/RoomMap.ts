@@ -133,4 +133,4 @@ class RoomMap {
     }
 }
 
-export { RoomMap, Winner }
+export { RoomMap, Winner, WinDesc }

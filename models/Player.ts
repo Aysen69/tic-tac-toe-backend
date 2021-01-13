@@ -7,11 +7,13 @@ enum GamerStatus {
 }
 
 class Player {
-    public readonly id: number
+    public readonly id: string
+    public readonly nickname: string
     private _gamerStatus: GamerStatus
 
-    constructor(id: number) {
+    constructor(id: string, nickname: string) {
         this.id = id
+        this.nickname = nickname
         this._gamerStatus = GamerStatus.Waiting
     }
 

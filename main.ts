@@ -1,36 +1,73 @@
 import { Player } from './models/Player'
-import { Room, RoomStatus } from './models/Room'
+import { Room, RoomStatus, SimpleRoom } from './models/Room'
 import Vector2D from './models/Vector2D'
-import * as net from 'net'
+import { createServer } from 'http'
+import { Server, Socket } from 'socket.io'
 
-let player = new Player(412)
-let player2 = new Player(413)
-let room = new Room(player, 'haha', 3)
-room.joinPlayer(player2)
-room.takeTurn(player, new Vector2D(0, 0))
-room.takeTurn(player2, new Vector2D(1, 0))
-room.takeTurn(player, new Vector2D(0, 1))
-room.takeTurn(player2, new Vector2D(1, 1))
-let turn = room.takeTurn(player, new Vector2D(0, 2))
-room.getRoomStatus()
-room.getPlayers()
+const httpServer = createServer()
+const io = new Server(httpServer, {})
 
-// let server: net.Server = net.createServer((s: net.Socket) => {
-//     s.setDefaultEncoding('utf-8')
-//     s.on('end', () => {
-//         console.log('client disconnected')
-//     })
-//     s.on('data', (chunk: Buffer) => {
-//         console.log('chunk', chunk, s.address())
-//     })
-//     console.log('client connected', s.address())
-//     s.write('hello')
-//     s.pipe(s)
-// })
-// server.on('error', (err) => {
-//     console.error(JSON.stringify(err))
-//     // throw err
-// })
-// server.listen(8124, () => {
-//     console.log('server bound')
-// })
+let rooms: Room[] = []
+
+io.on('connection', (socket: Socket) => {
+  socket.on('createRoom', (nickname, roomName) => {
+    let player = new Player(socket.id, nickname)
+    let room = new Room(player, roomName)
+    rooms.push(room)
+    socket.emit('createdRoom', { roomId: room.id })
+  })
+  socket.on('getRooms', () => {
+    let simpleRooms: SimpleRoom[] = []
+    for (let i = 0; i < rooms.length; i++) {
+      if (rooms[i].getRoomStatus() == RoomStatus.WaitingForPlayer) {
+        let simpleRoom: SimpleRoom = rooms[i].getAsSimpleRoom()
+        simpleRooms.push(simpleRoom)
+        break
+      }
+    }
+    socket.emit('rooms', simpleRooms)
+  })
+  socket.on('joinToRoom', (nickname, roomId) => {
+    let player = new Player(socket.id, nickname)
+    for (let i = 0; i < rooms.length; i++) {
+      if (rooms[i].id == roomId) {
+        rooms[i].joinPlayer(player)
+        io.to(rooms[i].secondPlayer!.id).emit('joinedToRoom', {
+          roomId: rooms[i].id,
+          nickname: rooms[i].firstPlayer.nickname
+        })
+        io.to(rooms[i].firstPlayer.id).emit('someoneJoinedToYourRoom', {
+          nickname: rooms[i].secondPlayer!.nickname
+        })
+        if (rooms[i].getRoomStatus() == RoomStatus.InBattle) {
+          io.to(rooms[i].firstPlayer.id).emit('gameMap', rooms[i].getRoomMap().getCells())
+          io.to(rooms[i].secondPlayer!.id).emit('gameMap', rooms[i].getRoomMap().getCells())
+        }
+        break
+      }
+    }
+  })
+  socket.on('takeTurn', (playerId, roomId, x, y) => {
+    for (let i = 0; i < rooms.length; i++) {
+      if (rooms[i].id == roomId) {
+        let turn = rooms[i].takeTurn(playerId, new Vector2D(x, y))
+        io.to(rooms[i].firstPlayer.id).emit('gameMap', rooms[i].getRoomMap().getCells())
+        io.to(rooms[i].secondPlayer!.id).emit('gameMap', rooms[i].getRoomMap().getCells())
+        if (turn) {
+          io.to(rooms[i].firstPlayer.id).emit('gameOver', turn, rooms[i].firstPlayer.gamerStatus)
+          io.to(rooms[i].secondPlayer!.id).emit('gameOver', turn, rooms[i].secondPlayer!.gamerStatus)
+        } else {
+          io.to(rooms[i].firstPlayer.id).emit('isYourTurn', rooms[i].isTurnOfFirstPlayer)
+          io.to(rooms[i].secondPlayer!.id).emit('isYourTurn', !rooms[i].isTurnOfFirstPlayer)
+        }
+        if (rooms[i].getRoomStatus() == RoomStatus.End) {
+          io.to(rooms[i].firstPlayer.id).emit('yourRoomIsKilled')
+          rooms.splice(i, 1)
+        }
+        break
+      }
+    }
+  })
+})
+
+httpServer.listen(3000)
