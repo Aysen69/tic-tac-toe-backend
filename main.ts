@@ -10,7 +10,7 @@ const io = new Server(httpServer, {})
 let rooms: Room[] = []
 
 io.on('connection', (socket: Socket) => {
-  socket.on('createRoom', (nickname, roomName) => {
+  socket.on('createRoom', (nickname: string, roomName: string) => {
     let player = new Player(socket.id, nickname)
     let room = new Room(player, roomName)
     rooms.push(room)
@@ -27,7 +27,7 @@ io.on('connection', (socket: Socket) => {
     }
     socket.emit('rooms', simpleRooms)
   })
-  socket.on('joinToRoom', (nickname, roomId) => {
+  socket.on('joinToRoom', (nickname: string, roomId: string) => {
     let player = new Player(socket.id, nickname)
     for (let i = 0; i < rooms.length; i++) {
       if (rooms[i].id == roomId) {
@@ -47,21 +47,33 @@ io.on('connection', (socket: Socket) => {
       }
     }
   })
-  socket.on('takeTurn', (playerId, roomId, x, y) => {
+  socket.on('takeTurn', (playerId: string, roomId: string, x: number, y: number) => {
     for (let i = 0; i < rooms.length; i++) {
       if (rooms[i].id == roomId) {
         let turn = rooms[i].takeTurn(playerId, new Vector2D(x, y))
         io.to(rooms[i].firstPlayer.id).emit('gameMap', rooms[i].getRoomMap().getCells())
         io.to(rooms[i].secondPlayer!.id).emit('gameMap', rooms[i].getRoomMap().getCells())
         if (turn) {
-          io.to(rooms[i].firstPlayer.id).emit('gameOver', turn, rooms[i].firstPlayer.gamerStatus)
-          io.to(rooms[i].secondPlayer!.id).emit('gameOver', turn, rooms[i].secondPlayer!.gamerStatus)
+          io.to(rooms[i].firstPlayer.id).emit('gameOver', rooms[i].firstPlayer.gamerStatus, turn)
+          io.to(rooms[i].secondPlayer!.id).emit('gameOver', rooms[i].secondPlayer!.gamerStatus, turn)
         } else {
           io.to(rooms[i].firstPlayer.id).emit('isYourTurn', rooms[i].isTurnOfFirstPlayer)
           io.to(rooms[i].secondPlayer!.id).emit('isYourTurn', !rooms[i].isTurnOfFirstPlayer)
         }
         if (rooms[i].getRoomStatus() == RoomStatus.End) {
-          io.to(rooms[i].firstPlayer.id).emit('yourRoomIsKilled')
+          rooms.splice(i, 1)
+        }
+        break
+      }
+    }
+  })
+  socket.on('surrender', (playerId: string, roomId: string) => {
+    for (let i = 0; i < rooms.length; i++) {
+      if (rooms[i].id == roomId) {
+        rooms[i].surrender(playerId)
+        if (rooms[i].getRoomStatus() == RoomStatus.End) {
+          io.to(rooms[i].firstPlayer.id).emit('gameOver', rooms[i].firstPlayer.gamerStatus, null)
+          io.to(rooms[i].secondPlayer!.id).emit('gameOver', rooms[i].secondPlayer!.gamerStatus, null)
           rooms.splice(i, 1)
         }
         break

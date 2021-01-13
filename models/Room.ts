@@ -79,7 +79,7 @@ class Room {
         }
     }
 
-    public surrender(playerId: string) {
+    public surrender(playerId: string): void {
         if (this._roomStatus == RoomStatus.InBattle) {
             let isSurrendered = false
             if (playerId == this.firstPlayer.id) {
