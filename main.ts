@@ -63,21 +63,28 @@ io.on('connection', (socket: Socket) => {
       }
     }
   }
+  const _sendGameOverInfo = (roomId: string) => {
+    console.log('sending game over info...')
+    for (let i = 0; i < rooms.length; i++) {
+      if (rooms[i].id == roomId) {
+        io.to(rooms[i].firstPlayer.id).emit('gameOver', {
+          you: rooms[i].firstPlayer.getAsSimplePlayer(),
+          enemy: rooms[i].secondPlayer?.getAsSimplePlayer()
+        })
+        io.to(rooms[i].secondPlayer!.id).emit('gameOver', {
+          you: rooms[i].secondPlayer!.getAsSimplePlayer(),
+          enemy: rooms[i].firstPlayer?.getAsSimplePlayer()
+        })
+      }
+    }
+  }
   const takeTurn = (playerId: string, roomId: string, x: number, y: number) => {
     console.log('taking turn of player id ' + playerId)
     for (let i = 0; i < rooms.length; i++) {
       if (rooms[i].id == roomId) {
         rooms[i].takeTurn(playerId, { x: x, y: y })
         if (rooms[i].isGameOver) {
-          console.log('sending game over info...')
-          io.to(rooms[i].firstPlayer.id).emit('gameOver', {
-            you: rooms[i].firstPlayer.getAsSimplePlayer(),
-            enemy: rooms[i].secondPlayer?.getAsSimplePlayer()
-          })
-          io.to(rooms[i].secondPlayer!.id).emit('gameOver', {
-            you: rooms[i].secondPlayer!.getAsSimplePlayer(),
-            enemy: rooms[i].firstPlayer?.getAsSimplePlayer()
-          })
+          _sendGameOverInfo(roomId)
         }
         getTiles(roomId)
         if (rooms[i].getRoomStatus() == RoomStatus.End) {
@@ -93,15 +100,7 @@ io.on('connection', (socket: Socket) => {
       if (rooms[i].id == roomId) {
         rooms[i].surrender(playerId)
         if (rooms[i].isGameOver) {
-          console.log('sending game over info...')
-          io.to(rooms[i].firstPlayer.id).emit('gameOver', {
-            you: rooms[i].firstPlayer.getAsSimplePlayer(),
-            enemy: rooms[i].secondPlayer?.getAsSimplePlayer()
-          })
-          io.to(rooms[i].secondPlayer!.id).emit('gameOver', {
-            you: rooms[i].secondPlayer!.getAsSimplePlayer(),
-            enemy: rooms[i].firstPlayer?.getAsSimplePlayer()
-          })
+          _sendGameOverInfo(roomId)
         }
         if (rooms[i].getRoomStatus() == RoomStatus.End) {
           rooms.splice(i, 1)
