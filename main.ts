@@ -1,8 +1,8 @@
 import { Player } from './models/Player'
-import { Room, RoomStatus, SimpleRoom } from './models/Room'
-import Vector2D from './models/Vector2D'
+import { Room } from './models/Room'
 import { createServer } from 'http'
 import { Server, Socket } from 'socket.io'
+import { SimpleRoom, RoomStatus } from './models/DuplexTypes'
 
 const httpServer = createServer()
 const io = new Server(httpServer, {})
@@ -11,14 +11,14 @@ let rooms: Room[] = []
 
 io.on('connection', (socket: Socket) => {
   console.log('someone connected to server')
-  socket.on('createRoom', (nickname: string, roomName: string) => {
+  const createRoom = (nickname: string, roomName: string, mapSize: number, markCount: number) => {
     console.log('creating room ' + roomName)
     let player = new Player(socket.id, nickname)
-    let room = new Room(player, roomName)
+    let room = new Room(player, roomName, mapSize, markCount)
     rooms.push(room)
     io.to(player.id).emit('createdRoom', room.getAsSimpleRoom())
-  })
-  socket.on('getRooms', () => {
+  }
+  const getRooms = () => {
     console.log('getting rooms...')
     let simpleRooms: SimpleRoom[] = []
     for (let i = 0; i < rooms.length; i++) {
@@ -28,67 +28,94 @@ io.on('connection', (socket: Socket) => {
       }
     }
     io.to(socket.id).emit('rooms', simpleRooms)
-  })
-  socket.on('joinToRoom', (nickname: string, roomId: string) => {
+  }
+  const joinToRoom = (nickname: string, roomId: string) => {
     console.log('joining to room id ' + roomId)
     let player = new Player(socket.id, nickname)
     for (let i = 0; i < rooms.length; i++) {
       if (rooms[i].id == roomId) {
         rooms[i].joinPlayer(player)
         io.to(rooms[i].secondPlayer!.id).emit('youJoinedToTheRoom', {
-          yourEnemy: { nickname: rooms[i].firstPlayer.nickname }
+          room: rooms[i].getAsSimpleRoom(),
+          you: rooms[i].secondPlayer?.getAsSimplePlayer(),
+          enemy: rooms[i].firstPlayer.getAsSimplePlayer()
         })
         io.to(rooms[i].firstPlayer.id).emit('someoneJoinedToYourRoom', {
-          yourEnemy: { nickname: rooms[i].secondPlayer!.nickname }
+          room: rooms[i].getAsSimpleRoom(),
+          you: rooms[i].firstPlayer.getAsSimplePlayer(),
+          enemy: rooms[i].secondPlayer?.getAsSimplePlayer()
         })
-        if (rooms[i].getRoomStatus() == RoomStatus.InBattle) {
-          io.to(rooms[i].firstPlayer.id).emit('tiles', rooms[i].getRoomMap().getCells())
-          io.to(rooms[i].secondPlayer!.id).emit('tiles', rooms[i].getRoomMap().getCells())
+        break
+      }
+    }
+  }
+  const getTiles = (roomId: string) => {
+    console.log('getting tiles...')
+    for (let i = 0; i < rooms.length; i++) {
+      if (rooms[i].id == roomId) {
+        io.to(rooms[i].firstPlayer.id).emit('tiles', rooms[i].getRoomMap().getCells())
+        io.to(rooms[i].secondPlayer!.id).emit('tiles', rooms[i].getRoomMap().getCells())
+        if (!rooms[i].isGameOver) {
+          io.to(rooms[i].firstPlayer.id).emit('turnOf', rooms[i].firstPlayer.id)
+          io.to(rooms[i].secondPlayer!.id).emit('turnOf', rooms[i].secondPlayer!.id)
         }
         break
       }
     }
-  })
-  socket.on('takeTurn', (playerId: string, roomId: string, x: number, y: number) => {
+  }
+  const takeTurn = (playerId: string, roomId: string, x: number, y: number) => {
     console.log('taking turn of player id ' + playerId)
     for (let i = 0; i < rooms.length; i++) {
       if (rooms[i].id == roomId) {
-        let turn = rooms[i].takeTurn(playerId, new Vector2D(x, y))
-        io.to(rooms[i].firstPlayer.id).emit('tiles', rooms[i].getRoomMap().getCells())
-        io.to(rooms[i].secondPlayer!.id).emit('tiles', rooms[i].getRoomMap().getCells())
-        if (turn) {
-          io.to(rooms[i].firstPlayer.id).emit('gameOver', rooms[i].firstPlayer.gamerStatus, turn)
-          io.to(rooms[i].secondPlayer!.id).emit('gameOver', rooms[i].secondPlayer!.gamerStatus, turn)
-        } else {
-          if (rooms[i].isTurnOfFirstPlayer) {
-            io.to(rooms[i].firstPlayer.id).emit('yourTurn')
-            io.to(rooms[i].secondPlayer!.id).emit('enemyTurn')
-          } else {
-            io.to(rooms[i].firstPlayer.id).emit('enemyTurn')
-            io.to(rooms[i].secondPlayer!.id).emit('yourTurn')
-          }
+        rooms[i].takeTurn(playerId, { x: x, y: y })
+        if (rooms[i].isGameOver) {
+          console.log('sending game over info...')
+          io.to(rooms[i].firstPlayer.id).emit('gameOver', {
+            you: rooms[i].firstPlayer.getAsSimplePlayer(),
+            enemy: rooms[i].secondPlayer?.getAsSimplePlayer()
+          })
+          io.to(rooms[i].secondPlayer!.id).emit('gameOver', {
+            you: rooms[i].secondPlayer!.getAsSimplePlayer(),
+            enemy: rooms[i].firstPlayer?.getAsSimplePlayer()
+          })
         }
+        getTiles(roomId)
         if (rooms[i].getRoomStatus() == RoomStatus.End) {
           rooms.splice(i, 1)
         }
         break
       }
     }
-  })
-  socket.on('surrender', (playerId: string, roomId: string) => {
+  }
+  const surrender = (playerId: string, roomId: string) => {
     console.log('surrendering of player id ' + playerId)
     for (let i = 0; i < rooms.length; i++) {
       if (rooms[i].id == roomId) {
         rooms[i].surrender(playerId)
+        if (rooms[i].isGameOver) {
+          console.log('sending game over info...')
+          io.to(rooms[i].firstPlayer.id).emit('gameOver', {
+            you: rooms[i].firstPlayer.getAsSimplePlayer(),
+            enemy: rooms[i].secondPlayer?.getAsSimplePlayer()
+          })
+          io.to(rooms[i].secondPlayer!.id).emit('gameOver', {
+            you: rooms[i].secondPlayer!.getAsSimplePlayer(),
+            enemy: rooms[i].firstPlayer?.getAsSimplePlayer()
+          })
+        }
         if (rooms[i].getRoomStatus() == RoomStatus.End) {
-          io.to(rooms[i].firstPlayer.id).emit('gameOver', rooms[i].firstPlayer.gamerStatus, null)
-          io.to(rooms[i].secondPlayer!.id).emit('gameOver', rooms[i].secondPlayer!.gamerStatus, null)
           rooms.splice(i, 1)
         }
         break
       }
     }
-  })
+  }
+  socket.on('createRoom', createRoom)
+  socket.on('getRooms', getRooms)
+  socket.on('joinToRoom', joinToRoom)
+  socket.on('getTiles', getTiles)
+  socket.on('takeTurn', takeTurn)
+  socket.on('surrender', surrender)
 })
 
 httpServer.listen(3000)

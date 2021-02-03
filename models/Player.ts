@@ -1,12 +1,6 @@
-enum GamerStatus {
-  Win,
-  Lose,
-  Draw,
-  InBattle,
-  Waiting
-}
+import { GamerStatus, SimplePlayer } from "./DuplexTypes"
 
-class Player {
+export class Player {
   public readonly id: string
   public readonly nickname: string
   private _gamerStatus: GamerStatus
@@ -24,6 +18,12 @@ class Player {
   public set gamerStatus(gamerStatus: GamerStatus) {
     this._gamerStatus = gamerStatus
   }
-}
 
-export { Player, GamerStatus }
+  public getAsSimplePlayer(): SimplePlayer {
+    return {
+      id: this.id,
+      nickname: this.nickname,
+      gamerStatus: this._gamerStatus
+    }
+  }
+}

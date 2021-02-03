@@ -1,37 +1,29 @@
-import { Player, GamerStatus } from './Player'
-import Vector2D from './Vector2D'
-import { RoomMap, Winner } from './RoomMap'
+import { Player } from './Player'
+import { RoomMap } from './RoomMap'
 import { v4 as uuidv4 } from 'uuid'
+import { GamerStatus, SimpleRoom, RoomStatus, Winner, Vector2D } from './DuplexTypes'
 
-enum RoomStatus {
-  WaitingForPlayer,
-  InBattle,
-  End
-}
-
-type SimpleRoom = {
-  id: string
-  name: string
-}
-
-class Room {
+export class Room {
   public readonly id: string
   public readonly name: string
   public firstPlayer: Player
   public secondPlayer?: Player
   private _roomMap: RoomMap
   public isTurnOfFirstPlayer: boolean
+  public isGameOver: boolean
   private _roomStatus: RoomStatus
   
-  constructor(player: Player, name: string, mapSize?: number, timeoutInSeconds?: number) {
-    mapSize = mapSize ? mapSize : 3
+  constructor(player: Player, name: string, mapSize?: number, markCount?: number, timeoutInSeconds?: number) {
+    mapSize = mapSize ? mapSize : 9
+    markCount = markCount ? markCount : 3
     timeoutInSeconds = timeoutInSeconds ? timeoutInSeconds : 60 * 15
     this.id = uuidv4()
     this.name = name
     this.firstPlayer = player
     this.firstPlayer.gamerStatus = GamerStatus.Waiting
-    this._roomMap = new RoomMap(mapSize)
+    this._roomMap = new RoomMap(mapSize, markCount)
     this.isTurnOfFirstPlayer = true
+    this.isGameOver = false
     this._roomStatus = RoomStatus.WaitingForPlayer
     setTimeout(() => {
       this._roomStatus = RoomStatus.End
@@ -55,7 +47,7 @@ class Room {
     }
   }
   
-  public takeTurn(playerId: string, coordinate: Vector2D): Vector2D[] | void {
+  public takeTurn(playerId: string, coordinate: Vector2D): void {
     if (this._roomStatus == RoomStatus.InBattle) {
       let isTurnTaked = false
       if (this.isTurnOfFirstPlayer == true && this.firstPlayer.id == playerId) {
@@ -66,16 +58,15 @@ class Room {
       }
       if (isTurnTaked) {
         this.isTurnOfFirstPlayer = !this.isTurnOfFirstPlayer
-        let win = this._roomMap!.checkWin()
-        if (win) {
-          if (win.winner == Winner.TheCross) {
+        let winner = this._roomMap!.checkGameOver()
+        if (winner) {
+          if (winner == Winner.TheCross) {
             this._gameOver(this.firstPlayer)
-          } else if (win.winner == Winner.TheNought) {
+          } else if (winner == Winner.TheNought) {
             this._gameOver(this.secondPlayer)
           } else {
             this._gameOver()
           }
-          return win.line
         }
       }
     }
@@ -99,6 +90,8 @@ class Room {
   }
   
   private _gameOver(winner?: Player) {
+    console.log('game over room id ' + this.id)
+    this.isGameOver = true
     if (this._roomStatus == RoomStatus.InBattle) {
       this._roomStatus = RoomStatus.End
       if (winner) {
@@ -119,9 +112,9 @@ class Room {
   public getAsSimpleRoom(): SimpleRoom {
     return {
       id: this.id,
-      name: this.name
+      name: this.name,
+      mapSize: this._roomMap.getMapSize(),
+      markCount: this._roomMap.getMarkCount()
     }
   }
 }
-
-export { Room, RoomStatus, SimpleRoom }
