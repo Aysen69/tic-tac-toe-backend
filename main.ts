@@ -56,8 +56,13 @@ io.on('connection', (socket: Socket) => {
         io.to(rooms[i].firstPlayer.id).emit('tiles', rooms[i].getRoomMap().getCells())
         io.to(rooms[i].secondPlayer!.id).emit('tiles', rooms[i].getRoomMap().getCells())
         if (!rooms[i].isGameOver) {
-          io.to(rooms[i].firstPlayer.id).emit('turnOf', rooms[i].firstPlayer.id)
-          io.to(rooms[i].secondPlayer!.id).emit('turnOf', rooms[i].secondPlayer!.id)
+          if (rooms[i].isTurnOfFirstPlayer) {
+            io.to(rooms[i].firstPlayer.id).emit('turnOf', rooms[i].firstPlayer.id)
+            io.to(rooms[i].secondPlayer!.id).emit('turnOf', rooms[i].firstPlayer.id)
+          } else {
+            io.to(rooms[i].firstPlayer.id).emit('turnOf', rooms[i].secondPlayer!.id)
+            io.to(rooms[i].secondPlayer!.id).emit('turnOf', rooms[i].secondPlayer!.id)
+          }
         }
         break
       }
