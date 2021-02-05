@@ -109,12 +109,50 @@ io.on('connection', (socket: Socket) => {
       }
     }
   }
+  const connectError = (err: Error) => {
+    console.log(`connect_error due to ${err.message}`)
+    for (let i = 0; i < rooms.length; i++) {
+      if (
+        rooms[i].firstPlayer.id == socket.id ||
+        rooms[i].secondPlayer!.id == socket.id
+      ) {
+        rooms[i].connectionError()
+        io.to(rooms[i].firstPlayer.id).emit('connectError')
+        io.to(rooms[i].secondPlayer!.id).emit('connectError')
+        _sendGameOverInfo(rooms[i].id)
+        if (rooms[i].getRoomStatus() == RoomStatus.End) {
+          rooms.splice(i, 1)
+        }
+        break
+      }
+    }
+  }
+  const disconnect = (reason: string) => {
+    console.log(`disconnect due to ${reason}`)
+    for (let i = 0; i < rooms.length; i++) {
+      if (
+        rooms[i].firstPlayer.id == socket.id ||
+        rooms[i].secondPlayer!.id == socket.id
+      ) {
+        rooms[i].connectionError()
+        io.to(rooms[i].firstPlayer.id).emit('roomDisconnect')
+        io.to(rooms[i].secondPlayer!.id).emit('roomDisconnect')
+        _sendGameOverInfo(rooms[i].id)
+        if (rooms[i].getRoomStatus() == RoomStatus.End) {
+          rooms.splice(i, 1)
+        }
+        break
+      }
+    }
+  }
   socket.on('createRoom', createRoom)
   socket.on('getRooms', getRooms)
   socket.on('joinToRoom', joinToRoom)
   socket.on('getTiles', getTiles)
   socket.on('takeTurn', takeTurn)
   socket.on('surrender', surrender)
+  socket.on('connect_error', connectError)
+  socket.on('disconnect', disconnect)
 })
 
 httpServer.listen(3000)

@@ -61,11 +61,11 @@ export class Room {
         let winner = this._roomMap!.checkGameOver()
         if (winner) {
           if (winner == Winner.TheCross) {
-            this._gameOver(this.firstPlayer)
+            this._gameOver(false, this.firstPlayer)
           } else if (winner == Winner.TheNought) {
-            this._gameOver(this.secondPlayer)
+            this._gameOver(false, this.secondPlayer)
           } else {
-            this._gameOver()
+            this._gameOver(false)
           }
         }
       }
@@ -76,11 +76,11 @@ export class Room {
     if (this._roomStatus == RoomStatus.InBattle) {
       let isSurrendered = false
       if (playerId == this.firstPlayer.id) {
-        this._gameOver(this.secondPlayer)
+        this._gameOver(false, this.secondPlayer)
         isSurrendered = true
       }
       if (playerId == this.secondPlayer!.id) {
-        this._gameOver(this.firstPlayer)
+        this._gameOver(false, this.firstPlayer)
         isSurrendered = true
       }
       if (isSurrendered) {
@@ -89,7 +89,11 @@ export class Room {
     }
   }
   
-  private _gameOver(winner?: Player) {
+  public connectionError(): void {
+    this._gameOver(true)
+  }
+  
+  private _gameOver(hasError: boolean, winner?: Player) {
     console.log('game over room id ' + this.id)
     this.isGameOver = true
     if (this._roomStatus == RoomStatus.InBattle) {
@@ -103,8 +107,13 @@ export class Room {
           this.secondPlayer!.gamerStatus = GamerStatus.Win
         }
       } else {
-        this.firstPlayer.gamerStatus = GamerStatus.Draw
-        this.secondPlayer!.gamerStatus = GamerStatus.Draw
+        if (hasError) {
+          this.firstPlayer.gamerStatus = GamerStatus.Error
+          this.secondPlayer!.gamerStatus = GamerStatus.Error
+        } else {
+          this.firstPlayer.gamerStatus = GamerStatus.Draw
+          this.secondPlayer!.gamerStatus = GamerStatus.Draw
+        }
       }
     }
   }

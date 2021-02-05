@@ -3,6 +3,7 @@ export enum GamerStatus {
   Lose,
   Draw,
   InBattle,
+  Error,
   Waiting
 }
 
